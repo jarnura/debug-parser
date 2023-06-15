@@ -1,15 +1,18 @@
+#![allow(dead_code)]
+
+mod string;
 use std::collections::HashMap;
 
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag, take_while},
     character::complete::{alphanumeric1, char, digit1, one_of},
-    combinator::{cut, map, map_res, opt, recognize, value},
-    error::{context, ContextError, ParseError},
+    combinator::{cut, map, opt, value},
+    error::{context, ContextError, FromExternalError, ParseError},
     multi::separated_list0,
     number::complete::{double, float},
     sequence::{delimited, preceded, separated_pair, terminated},
-    Err, IResult, Parser,
+    AsChar, Err, IResult, InputTakeAtPosition, Parser,
 };
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -18,9 +21,9 @@ enum DataModel<'a> {
     Null,                                 // ✅
     Boolean(bool),                        // ✅
     Float(f64),                           // ✅
-    String(&'a str),                      // ✅
-    Map(HashMap<&'a str, DataModel<'a>>), //
-    Vec(Vec<DataModel<'a>>),              //
+    String(String),                       // ✅
+    Map(HashMap<&'a str, DataModel<'a>>), // ✅
+    Vec(Vec<DataModel<'a>>),              // ✅
 }
 
 fn spacer<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -29,8 +32,18 @@ fn spacer<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E
     take_while(move |c| chars.contains(c))(i)
 }
 
+pub fn char_checker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E>
+where
+    <&'a str as nom::InputTakeAtPosition>::Item: nom::AsChar,
+{
+    input.split_at_position1_complete(
+        |item| !(item.is_alphanum() || item == '_'),
+        nom::error::ErrorKind::AlphaNumeric,
+    )
+}
+
 fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
-    escaped(alphanumeric1, '\\', one_of("\"n\\"))(i)
+    escaped(char_checker, '\\', one_of("\"n\\"))(i)
 }
 
 fn parse_bool<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, bool, E> {
@@ -68,7 +81,12 @@ fn parse_integer<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
     })
 }
 
-fn parse_array<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_array<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
     context(
@@ -84,7 +102,12 @@ fn parse_array<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     .parse(input)
 }
 
-fn parse_array_tuple<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_array_tuple<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
     context(
@@ -100,7 +123,12 @@ fn parse_array_tuple<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     .parse(input)
 }
 
-fn parse_key_value<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_key_value<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     i: &'a str,
 ) -> IResult<&'a str, (&'a str, DataModel<'a>), E> {
     separated_pair(
@@ -111,7 +139,12 @@ fn parse_key_value<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     .parse(i)
 }
 
-fn parse_hash<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_hash<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
     context(
@@ -129,7 +162,12 @@ fn parse_hash<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     )(input)
 }
 
-fn parse_struct<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_struct<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
     let value = context("struct", separated_pair(parse_str, spacer, parse_hash))(input)?;
@@ -137,7 +175,12 @@ fn parse_struct<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     Ok(value.1)
 }
 
-fn parse_tuple_var<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_tuple_var<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     input: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
     context(
@@ -149,7 +192,12 @@ fn parse_tuple_var<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     )(input)
 }
 
-fn data_model<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn data_model<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     i: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
     println!("{}", i);
@@ -161,7 +209,7 @@ fn data_model<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
             map(parse_hash, DataModel::Map),
             map(parse_array, DataModel::Vec),
             map(parse_array_tuple, DataModel::Vec),
-            map(parse_string, DataModel::String),
+            map(string::parse_string, DataModel::String),
             map(double, DataModel::Float),
             map(parse_bool, DataModel::Boolean),
             map(parse_null, |_| DataModel::Null),
@@ -170,7 +218,12 @@ fn data_model<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
     .parse(i)
 }
 
-fn root<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn root<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>,
+>(
     i: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
     delimited(spacer, data_model, opt(spacer)).parse(i)
@@ -213,8 +266,8 @@ mod tests {
 
     #[derive(Debug)]
     struct Bob {
-        innerint: f32,
-        innerstring: String,
+        inner_int: f32,
+        inner_string: String,
     }
 
     struct Hidden;
@@ -245,8 +298,8 @@ mod tests {
             .into_iter()
             .collect(),
             nested: Bob {
-                innerint: -50.0,
-                innerstring: "Sharel".to_string(),
+                inner_int: -50.0,
+                inner_string: "Sharel".to_string(),
             },
             custom_hidden: Hidden,
             enumer1: Boat::JustOne(1024),
@@ -307,7 +360,7 @@ mod tests {
     #[test]
     fn test_string() {
         let data = r#""true""#;
-        let value = parse_string::<(&str, ErrorKind)>(data).unwrap();
+        let value = string::parse_string::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(value.1, "true", "residue: {}", value.0)
     }
 
@@ -315,7 +368,7 @@ mod tests {
     #[should_panic]
     fn test_not_string() {
         let data = "true";
-        let _value = parse_string::<(&str, ErrorKind)>(data).unwrap();
+        let _value = string::parse_string::<(&str, ErrorKind)>(data).unwrap();
     }
 
     #[test]
@@ -353,7 +406,7 @@ mod tests {
         let value = parse_array::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            vec![DataModel::String("12"), DataModel::Float(2.3)],
+            vec![DataModel::String("12".to_string()), DataModel::Float(2.3)],
             "residue: {}",
             value.0
         )
@@ -366,7 +419,7 @@ mod tests {
         let value = parse_array::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            vec![DataModel::String("12"), DataModel::Float(23.0)],
+            vec![DataModel::String("12".to_string()), DataModel::Float(23.0)],
             "residue: {}",
             value.0
         )
@@ -378,7 +431,7 @@ mod tests {
         let value = parse_array_tuple::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            vec![DataModel::String("12"), DataModel::Float(23.0)],
+            vec![DataModel::String("12".to_string()), DataModel::Float(23.0)],
             "residue: {}",
             value.0
         )
@@ -391,7 +444,7 @@ mod tests {
         let value = parse_array_tuple::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            vec![DataModel::String("12"), DataModel::Float(23.0)],
+            vec![DataModel::String("12".to_string()), DataModel::Float(23.0)],
             "residue: {}",
             value.0
         )
@@ -404,7 +457,7 @@ mod tests {
         assert_eq!(
             value.1,
             [
-                ("inner", DataModel::String("data")),
+                ("inner", DataModel::String("data".to_string())),
                 ("outer", DataModel::Float(123.0))
             ]
             .into_iter()
@@ -422,7 +475,7 @@ mod tests {
         assert_eq!(
             value.1,
             [
-                ("inner", DataModel::String("data")),
+                ("inner", DataModel::String("data".to_string())),
                 ("outer", DataModel::Float(123.0))
             ]
             .into_iter()
@@ -439,7 +492,7 @@ mod tests {
         assert_eq!(
             value.1,
             [
-                ("inner", DataModel::String("data")),
+                ("inner", DataModel::String("data".to_string())),
                 ("outer", DataModel::Float(123.0))
             ]
             .into_iter()
@@ -457,7 +510,7 @@ mod tests {
         assert_eq!(
             value.1,
             [
-                ("inner", DataModel::String("data")),
+                ("inner", DataModel::String("data".to_string())),
                 ("outer", DataModel::Float(123.0))
             ]
             .into_iter()
@@ -473,7 +526,10 @@ mod tests {
         let value = parse_tuple_var::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            DataModel::Vec(vec![DataModel::String("12"), DataModel::Float(23.0)]),
+            DataModel::Vec(vec![
+                DataModel::String("12".to_string()),
+                DataModel::Float(23.0)
+            ]),
             "residue: {}",
             value.0
         )
@@ -486,7 +542,10 @@ mod tests {
         let value = parse_tuple_var::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
-            DataModel::Vec(vec![DataModel::String("12"), DataModel::Float(23.0)]),
+            DataModel::Vec(vec![
+                DataModel::String("12".to_string()),
+                DataModel::Float(23.0)
+            ]),
             "residue: {}",
             value.0
         )
@@ -495,14 +554,14 @@ mod tests {
     #[test]
     fn test_bob() {
         let bob = Bob {
-            innerint: 123.0,
-            innerstring: "data".to_string(),
+            inner_int: 123.0,
+            inner_string: "data".to_string(),
         };
 
         let val = format!("{:?}", bob);
         assert_eq!(
             serde_json::to_string(&root::<(&str, ErrorKind)>(&val).unwrap().1).unwrap(),
-            "{\"innerstring\":\"data\",\"innerint\":123.0}",
+            "{\"inner_int\":123.0,\"inner_string\":\"data\"}",
         );
     }
 }
