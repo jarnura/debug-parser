@@ -47,6 +47,7 @@ fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str
 }
 
 fn parse_bool<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, bool, E> {
+    println!("bool called : {}\n\n", i);
     let parse_true = value(true, tag("true"));
     let parse_false = value(false, tag("false"));
 
@@ -54,10 +55,11 @@ fn parse_bool<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, bool, 
 }
 
 fn parse_null<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
-    value((), tag("null")).parse(input)
+    println!("null called : {}\n\n", input);
+    value((), tag("None")).parse(input)
 }
 
-fn parse_string<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
+fn parse_string<'a, E: ParseError<&'a str> + ContextError<&'a str> + std::fmt::Debug>(
     input: &'a str,
 ) -> IResult<&'a str, &'a str, E> {
     context(
@@ -81,14 +83,21 @@ fn parse_integer<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
     })
 }
 
+fn parse_float<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f64, E> {
+    println!("double called : {}\n\n", input);
+    double(input)
+}
+
 fn parse_array<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
+    println!("array called : {}\n\n", input);
     context(
         "array",
         preceded(
@@ -106,10 +115,12 @@ fn parse_array_tuple<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
+    println!("array tuple called : {}\n\n", input);
     context(
         "tuple",
         preceded(
@@ -123,18 +134,37 @@ fn parse_array_tuple<
     .parse(input)
 }
 
-fn parse_key_value<
+fn parse_key_value_hash<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     i: &'a str,
 ) -> IResult<&'a str, (&'a str, DataModel<'a>), E> {
     separated_pair(
+        preceded(spacer, parse_string),
+        cut(preceded(spacer, char(':'))),
+        preceded(spacer, data_model),
+    )
+    .parse(i)
+}
+
+fn parse_key_value_struct<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
+>(
+    i: &'a str,
+) -> IResult<&'a str, (&'a str, DataModel<'a>), E> {
+    println!("kv struct hash: {}", i);
+    separated_pair(
         preceded(spacer, parse_str),
         cut(preceded(spacer, char(':'))),
-        data_model,
+        preceded(spacer, data_model),
     )
     .parse(i)
 }
@@ -143,17 +173,19 @@ fn parse_hash<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
+    println!("hashmap called : {}\n\n", input);
     context(
         "map",
         preceded(
             char('{'),
             cut(terminated(
                 map(
-                    separated_list0(preceded(spacer, char(',')), parse_key_value),
+                    separated_list0(preceded(spacer, char(',')), parse_key_value_hash),
                     |tuple_vec| tuple_vec.into_iter().collect(),
                 ),
                 preceded(spacer, char('}')),
@@ -162,24 +194,60 @@ fn parse_hash<
     )(input)
 }
 
+fn parse_hash_unticked<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
+>(
+    input: &'a str,
+) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
+    println!("unticked hash: {}", input);
+    context(
+        "struct map",
+        preceded(
+            spacer,
+            preceded(
+                char('{'),
+                cut(terminated(
+                    map(
+                        separated_list0(preceded(spacer, char(',')), parse_key_value_struct),
+                        |tuple_vec| tuple_vec.into_iter().collect(),
+                    ),
+                    preceded(spacer, char('}')),
+                )),
+            ),
+        ),
+    )(input)
+}
+
 fn parse_struct<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
-    let value = context("struct", separated_pair(parse_str, spacer, parse_hash))(input)?;
+    println!("struct called : {}\n\n", input);
+    let value = context(
+        "struct",
+        separated_pair(parse_str, spacer, parse_hash_unticked),
+    )(input);
+    println!("post parse struct: {:#?}", value);
+    let value = value?;
 
-    Ok(value.1)
+    Ok((value.0, value.1 .1))
 }
 
 fn parse_tuple_var<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     input: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
@@ -192,27 +260,43 @@ fn parse_tuple_var<
     )(input)
 }
 
+pub fn char_checker_wc<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E>
+where
+    <&'a str as nom::InputTakeAtPosition>::Item: nom::AsChar,
+{
+    input.split_at_position1_complete(
+        |item| item == ',' || item == '}',
+        nom::error::ErrorKind::AlphaNumeric,
+    )
+}
+
+fn parse_wildcard<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+    escaped(char_checker_wc, '\\', one_of("\"n\\"))(i)
+}
+
 fn data_model<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     i: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
-    println!("{}", i);
+    // println!("data model: {}\n\n", i);
     preceded(
         spacer,
         alt((
+            map(parse_null, |_| DataModel::Null),
+            map(parse_bool, DataModel::Boolean),
+            map(parse_float, DataModel::Float),
+            map(string::parse_string, DataModel::String),
+            map(parse_array_tuple, DataModel::Vec),
+            map(parse_array, DataModel::Vec),
+            map(parse_hash, DataModel::Map),
             map(parse_tuple_var, |x| x),
             map(parse_struct, DataModel::Map),
-            map(parse_hash, DataModel::Map),
-            map(parse_array, DataModel::Vec),
-            map(parse_array_tuple, DataModel::Vec),
-            map(string::parse_string, DataModel::String),
-            map(double, DataModel::Float),
-            map(parse_bool, DataModel::Boolean),
-            map(parse_null, |_| DataModel::Null),
+            map(parse_wildcard, |x| DataModel::String(x.to_string())),
         )),
     )
     .parse(i)
@@ -222,7 +306,8 @@ fn root<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
-        + FromExternalError<&'a str, std::num::ParseIntError>,
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
 >(
     i: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
@@ -231,10 +316,8 @@ fn root<
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use nom::error::ErrorKind;
-    use serde::Deserialize;
 
     use crate::*;
 
@@ -563,5 +646,37 @@ mod tests {
             serde_json::to_string(&root::<(&str, ErrorKind)>(&val).unwrap().1).unwrap(),
             "{\"inner_int\":123.0,\"inner_string\":\"data\"}",
         );
+    }
+
+    #[test]
+    fn test_try_all() {
+        let data = generate_data();
+        let data = format!("{:?}", data);
+        eprintln!("{:#?}", data);
+        let data_model = root::<(&str, ErrorKind)>(&data).unwrap().1;
+        eprintln!("{:#?}", data_model);
+        panic!()
+    }
+
+    #[derive(Debug)]
+    struct A {
+        data: String,
+        value: Ba,
+    }
+    #[derive(Debug)]
+    struct Ba {
+        item: i32,
+    }
+
+    #[test]
+    fn test_xyz() {
+        let data = A {
+            data: "123".to_string(),
+            value: Ba { item: 123 },
+        };
+        let data = format!("{:?}", data);
+        let data_model = root::<(&str, ErrorKind)>(&data).unwrap().1;
+        eprintln!("{:#?}", data_model);
+        panic!()
     }
 }

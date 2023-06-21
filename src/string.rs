@@ -13,10 +13,7 @@ where
 {
     let parse_hex = take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit());
 
-    let parse_delimited_hex = preceded(
-        char('u'),
-        delimited(char('{'), parse_hex, char('}')),
-    );
+    let parse_delimited_hex = preceded(char('u'), delimited(char('{'), parse_hex, char('}')));
 
     let parse_u32 = map_res(parse_delimited_hex, move |hex| u32::from_str_radix(hex, 16));
 
@@ -90,18 +87,15 @@ pub fn parse_string<'a, E>(input: &'a str) -> IResult<&'a str, String, E>
 where
     E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
-    let build_string = fold_many0(
-        parse_fragment,
-        String::new,
-        |mut string, fragment| {
-            match fragment {
-                StringFragment::Literal(s) => string.push_str(s),
-                StringFragment::EscapedChar(c) => string.push(c),
-                StringFragment::EscapedWS => {}
-            }
-            string
-        },
-    );
+    println!("string called : {}\n\n", input);
+    let build_string = fold_many0(parse_fragment, String::new, |mut string, fragment| {
+        match fragment {
+            StringFragment::Literal(s) => string.push_str(s),
+            StringFragment::EscapedChar(c) => string.push(c),
+            StringFragment::EscapedWS => {}
+        }
+        string
+    });
 
     delimited(char('"'), build_string, char('"')).parse(input)
 }
@@ -110,17 +104,13 @@ pub fn parse_str<'a, E>(input: &'a str) -> IResult<&'a str, String, E>
 where
     E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
-    fold_many0(
-        parse_fragment,
-        String::new,
-        |mut string, fragment| {
-            match fragment {
-                StringFragment::Literal(s) => string.push_str(s),
-                StringFragment::EscapedChar(c) => string.push(c),
-                StringFragment::EscapedWS => {}
-            }
-            string
-        },
-    )
+    fold_many0(parse_fragment, String::new, |mut string, fragment| {
+        match fragment {
+            StringFragment::Literal(s) => string.push_str(s),
+            StringFragment::EscapedChar(c) => string.push(c),
+            StringFragment::EscapedWS => {}
+        }
+        string
+    })
     .parse(input)
 }
