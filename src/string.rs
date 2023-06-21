@@ -87,7 +87,7 @@ pub fn parse_string<'a, E>(input: &'a str) -> IResult<&'a str, String, E>
 where
     E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
-    println!("string called : {}\n\n", input);
+    
     let build_string = fold_many0(parse_fragment, String::new, |mut string, fragment| {
         match fragment {
             StringFragment::Literal(s) => string.push_str(s),

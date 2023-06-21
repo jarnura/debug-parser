@@ -47,7 +47,6 @@ fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str
 }
 
 fn parse_bool<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, bool, E> {
-    println!("bool called : {}\n\n", i);
     let parse_true = value(true, tag("true"));
     let parse_false = value(false, tag("false"));
 
@@ -55,7 +54,6 @@ fn parse_bool<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, bool, 
 }
 
 fn parse_null<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, (), E> {
-    println!("null called : {}\n\n", input);
     value((), tag("None")).parse(input)
 }
 
@@ -84,7 +82,6 @@ fn parse_integer<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
 }
 
 fn parse_float<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f64, E> {
-    println!("double called : {}\n\n", input);
     double(input)
 }
 
@@ -97,7 +94,6 @@ fn parse_array<
 >(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
-    println!("array called : {}\n\n", input);
     context(
         "array",
         preceded(
@@ -120,7 +116,6 @@ fn parse_array_tuple<
 >(
     input: &'a str,
 ) -> IResult<&'a str, Vec<DataModel<'a>>, E> {
-    println!("array tuple called : {}\n\n", input);
     context(
         "tuple",
         preceded(
@@ -160,7 +155,6 @@ fn parse_key_value_struct<
 >(
     i: &'a str,
 ) -> IResult<&'a str, (&'a str, DataModel<'a>), E> {
-    println!("kv struct hash: {}", i);
     separated_pair(
         preceded(spacer, parse_str),
         cut(preceded(spacer, char(':'))),
@@ -178,7 +172,6 @@ fn parse_hash<
 >(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
-    println!("hashmap called : {}\n\n", input);
     context(
         "map",
         preceded(
@@ -203,7 +196,6 @@ fn parse_hash_unticked<
 >(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
-    println!("unticked hash: {}", input);
     context(
         "struct map",
         preceded(
@@ -231,12 +223,11 @@ fn parse_struct<
 >(
     input: &'a str,
 ) -> IResult<&'a str, HashMap<&'a str, DataModel<'a>>, E> {
-    println!("struct called : {}\n\n", input);
     let value = context(
         "struct",
         separated_pair(parse_str, spacer, parse_hash_unticked),
     )(input);
-    println!("post parse struct: {:#?}", value);
+
     let value = value?;
 
     Ok((value.0, value.1 .1))
@@ -283,7 +274,7 @@ fn data_model<
 >(
     i: &'a str,
 ) -> IResult<&'a str, DataModel<'a>, E> {
-    // println!("data model: {}\n\n", i);
+    //
     preceded(
         spacer,
         alt((
@@ -413,7 +404,7 @@ mod tests {
 
     #[test]
     fn test_null() {
-        let data = "null";
+        let data = "None";
         let value = parse_null::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(value.1, (), "residue {}", value.0)
     }
@@ -485,7 +476,7 @@ mod tests {
     #[test]
     fn test_array() {
         let data = "[ \"12\", 2.3]";
-        eprintln!("{}", data);
+
         let value = parse_array::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
@@ -535,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_hash() {
-        let data = r#"{ inner: "data", outer: 123 }"#;
+        let data = r#"{ "inner": "data", "outer": 123 }"#;
         let value = parse_hash::<(&str, ErrorKind)>(data).unwrap();
         assert_eq!(
             value.1,
@@ -642,20 +633,22 @@ mod tests {
         };
 
         let val = format!("{:?}", bob);
-        assert_eq!(
-            serde_json::to_string(&root::<(&str, ErrorKind)>(&val).unwrap().1).unwrap(),
-            "{\"inner_int\":123.0,\"inner_string\":\"data\"}",
-        );
+
+        let a_val1 = "{\"inner_string\":\"data\",\"inner_int\":123.0}";
+        let a_val2 = "{\"inner_int\":123.0,\"inner_string\":\"data\"}";
+        let value = serde_json::to_string(&root::<(&str, ErrorKind)>(&val).unwrap().1).unwrap();
+
+        assert!(value == a_val1 || value == a_val2);
     }
 
     #[test]
     fn test_try_all() {
         let data = generate_data();
         let data = format!("{:?}", data);
-        eprintln!("{:#?}", data);
+
         let data_model = root::<(&str, ErrorKind)>(&data).unwrap().1;
-        eprintln!("{:#?}", data_model);
-        panic!()
+
+        panic!("{:?}", data_model);
     }
 
     #[derive(Debug)]
@@ -676,7 +669,11 @@ mod tests {
         };
         let data = format!("{:?}", data);
         let data_model = root::<(&str, ErrorKind)>(&data).unwrap().1;
-        eprintln!("{:#?}", data_model);
-        panic!()
+        let value = serde_json::to_string(&data_model).unwrap();
+        eprintln!("{:#?}", value);
+
+        let a_val2 = "{\"value\":{\"item\":123.0},\"data\":\"123\"}";
+        let a_val1 = "{\"data\":\"123\",\"value\":{\"item\":123.0}}";
+        assert!(value == a_val1 || value == a_val2)
     }
 }
