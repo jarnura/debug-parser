@@ -1,0 +1,14 @@
+{
+  "name": "debug-parser",
+  "version": "0.1.0",
+  "files": [
+    "parser_bg.wasm",
+    "parser.js",
+    "parser.d.ts"
+  ],
+  "module": "parser.js",
+  "types": "parser.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
