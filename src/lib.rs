@@ -17,13 +17,29 @@ use nom::{
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(untagged)]
-enum DataModel<'a> {
+pub enum DataModel<'a> {
     Null,                                 // ✅
     Boolean(bool),                        // ✅
     Float(f64),                           // ✅
     String(String),                       // ✅
     Map(HashMap<&'a str, DataModel<'a>>), // ✅
     Vec(Vec<DataModel<'a>>),              // ✅
+}
+
+impl<'a> std::hash::Hash for DataModel<'a>
+where
+    HashMap<&'a str, DataModel<'a>>: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            DataModel::Null => ().hash(state),
+            DataModel::Boolean(data) => data.hash(state),
+            DataModel::Float(_data) => {}
+            DataModel::String(data) => data.hash(state),
+            DataModel::Map(data) => data.hash(state),
+            DataModel::Vec(data) => data.hash(state),
+        }
+    }
 }
 
 fn spacer<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -265,7 +281,7 @@ fn parse_wildcard<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'
     escaped(char_checker_wc, '\\', one_of("\"n\\"))(i)
 }
 
-fn data_model<
+pub fn data_model<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
@@ -293,7 +309,7 @@ fn data_model<
     .parse(i)
 }
 
-fn root<
+pub fn root<
     'a,
     E: ParseError<&'a str>
         + ContextError<&'a str>
@@ -675,5 +691,23 @@ mod tests {
         let a_val2 = "{\"value\":{\"item\":123.0},\"data\":\"123\"}";
         let a_val1 = "{\"data\":\"123\",\"value\":{\"item\":123.0}}";
         assert!(value == a_val1 || value == a_val2)
+    }
+
+    #[test]
+    fn test_me_10000() {
+        let data1 = r#"Dalton { name: ""#;
+        let data2 = r#"" }"#;
+        let heavy_data = String::from("A").repeat(1000);
+        let composite_data = {
+            let mut output = String::new();
+            output.push_str(data1);
+            output.push_str(&heavy_data);
+            output.push_str(data2);
+            output
+        };
+        let parsed = root::<(&str, ErrorKind)>(&composite_data).unwrap().1;
+        let expected = DataModel::Map([("name", DataModel::String(heavy_data))].into());
+        println!("{:#?}", parsed);
+        assert_eq!(parsed, expected)
     }
 }
