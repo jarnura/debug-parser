@@ -3,9 +3,9 @@ use nom::bytes::streaming::{is_not, take_while_m_n};
 use nom::character::streaming::{char, multispace1};
 use nom::combinator::{map, map_opt, map_res, value, verify};
 use nom::error::{FromExternalError, ParseError};
-use nom::multi::{fold_many0, fold_many_m_n};
+use nom::multi::fold_many0;
 use nom::sequence::{delimited, preceded};
-use nom::{multi, IResult, Parser};
+use nom::{IResult, Parser};
 
 fn parse_unicode<'a, E>(input: &'a str) -> IResult<&'a str, char, E>
 where
@@ -87,7 +87,6 @@ pub fn parse_string<'a, E>(input: &'a str) -> IResult<&'a str, String, E>
 where
     E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
-    
     let build_string = fold_many0(parse_fragment, String::new, |mut string, fragment| {
         match fragment {
             StringFragment::Literal(s) => string.push_str(s),
