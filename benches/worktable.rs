@@ -109,5 +109,21 @@ fn bench_parse_and_serialize(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_everything, bench_everything_dbg_pnt, bench_parse_and_serialize);
+fn bench_payment_request(c: &mut Criterion) {
+    let data = r#"PaymentsRequest { payment_id: None, merchant_id: None, amount: Some(Value(6500)), routing: None, connector: None, currency: Some(USD), capture_method: Some(Automatic), amount_to_capture: None, capture_on: None, confirm: Some(false), customer: None, customer_id: Some("hyperswitch111"), email: Some(Email(*********@gmail.com)), name: None, phone: None, phone_country_code: None, off_session: None, description: Some("Hello this is description"), return_url: None, setup_future_usage: None, authentication_type: Some(ThreeDs), payment_method_data: None, payment_method: None, payment_token: None, card_cvc: None, shipping: Some(Address { address: Some(AddressDetails { city: Some("Banglore"), country: Some(US), line1: Some(*** alloc::string::String ***), line2: Some(*** alloc::string::String ***), line3: Some(*** alloc::string::String ***), zip: Some(*** alloc::string::String ***), state: Some(*** alloc::string::String ***), first_name: Some(*** alloc::string::String ***), last_name: None }), phone: Some(PhoneDetails { number: Some(*** alloc::string::String ***), country_code: Some("+1") }) }), billing: Some(Address { address: Some(AddressDetails { city: Some("San Fransico"), country: Some(AT), line1: Some(*** alloc::string::String ***), line2: Some(*** alloc::string::String ***), line3: Some(*** alloc::string::String ***), zip: Some(*** alloc::string::String ***), state: Some(*** alloc::string::String ***), first_name: Some(*** alloc::string::String ***), last_name: Some(*** alloc::string::String ***) }), phone: Some(PhoneDetails { number: Some(*** alloc::string::String ***), country_code: Some("+91") }) }), statement_descriptor_name: None, statement_descriptor_suffix: None, metadata: Some(Metadata { order_details: Some(OrderDetails { product_name: "gillete razor", quantity: 1 }), order_category: None, redirect_response: None, allowed_payment_method_types: None }), order_details: None, client_secret: None, mandate_data: None, mandate_id: None, browser_info: None, payment_experience: None, payment_method_type: None, business_country: Some(US), business_label: Some("default"), merchant_connector_details: None, allowed_payment_method_types: None, business_sub_label: None, manual_retry: false, udf: None }"#;
+
+    c.bench_function("bench_payment_request", |b| {
+        b.iter(|| {
+            let parsed = black_box(root::<(&str, ErrorKind)>(&data).unwrap().1);
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_everything,
+    bench_everything_dbg_pnt,
+    bench_parse_and_serialize,
+    bench_payment_request
+);
 criterion_main!(benches);
