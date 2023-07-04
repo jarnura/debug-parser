@@ -61,6 +61,16 @@ where
     )
 }
 
+pub fn num_checker<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E>
+where
+    <&'a str as nom::InputTakeAtPosition>::Item: nom::AsChar,
+{
+    input.split_at_position1_complete(
+        |item| !(item.is_digit(10) || item == '.'),
+        nom::error::ErrorKind::AlphaNumeric,
+    )
+}
+
 fn parse_str<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     escaped(char_checker, '\\', one_of("\"n\\"))(i)
 }
@@ -98,6 +108,35 @@ fn parse_integer<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
             nom::error::ErrorKind::Fail,
         ))),
     })
+}
+
+fn parse_datetime<
+    'a,
+    E: ParseError<&'a str>
+        + ContextError<&'a str>
+        + FromExternalError<&'a str, std::num::ParseIntError>
+        + std::fmt::Debug,
+>(
+    i: &'a str,
+) -> IResult<&'a str, String, E> {
+    context(
+        "datetime",
+        map(
+            separated_pair(
+                separated_list0(tag("-"), num_checker),
+                tag(" "),
+                separated_list0(tag(":"), num_checker),
+            ),
+            |x| {
+                let mut string = String::new();
+                string.push_str(&x.0.join("-"));
+                string.push_str(" ");
+                string.push_str(&x.1.join(":"));
+                string
+            },
+        ),
+    )
+    .parse(i)
 }
 
 fn parse_float<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, f64, E> {
@@ -299,6 +338,7 @@ pub fn data_model<
         alt((
             map(parse_null, |_| DataModel::Null),
             map(parse_bool, DataModel::Boolean),
+            map(parse_datetime, DataModel::String),
             map(parse_float, DataModel::Float),
             map(string::parse_string, DataModel::String),
             map(parse_array_tuple, DataModel::Vec),
@@ -725,11 +765,28 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "It's panicable"]
     fn test_payment_request() {
         let data = r#"PaymentsRequest { payment_id: None, merchant_id: None, amount: Some(Value(6500)), routing: None, connector: None, currency: Some(USD), capture_method: Some(Automatic), amount_to_capture: None, capture_on: None, confirm: Some(false), customer: None, customer_id: Some("hyperswitch111"), email: Some(Email(*********@gmail.com)), name: None, phone: None, phone_country_code: None, off_session: None, description: Some("Hello this is description"), return_url: None, setup_future_usage: None, authentication_type: Some(ThreeDs), payment_method_data: None, payment_method: None, payment_token: None, card_cvc: None, shipping: Some(Address { address: Some(AddressDetails { city: Some("Banglore"), country: Some(US), line1: Some(*** alloc::string::String ***), line2: Some(*** alloc::string::String ***), line3: Some(*** alloc::string::String ***), zip: Some(*** alloc::string::String ***), state: Some(*** alloc::string::String ***), first_name: Some(*** alloc::string::String ***), last_name: None }), phone: Some(PhoneDetails { number: Some(*** alloc::string::String ***), country_code: Some("+1") }) }), billing: Some(Address { address: Some(AddressDetails { city: Some("San Fransico"), country: Some(AT), line1: Some(*** alloc::string::String ***), line2: Some(*** alloc::string::String ***), line3: Some(*** alloc::string::String ***), zip: Some(*** alloc::string::String ***), state: Some(*** alloc::string::String ***), first_name: Some(*** alloc::string::String ***), last_name: Some(*** alloc::string::String ***) }), phone: Some(PhoneDetails { number: Some(*** alloc::string::String ***), country_code: Some("+91") }) }), statement_descriptor_name: None, statement_descriptor_suffix: None, metadata: Some(Metadata { order_details: Some(OrderDetails { product_name: "gillete razor", quantity: 1 }), order_category: None, redirect_response: None, allowed_payment_method_types: None }), order_details: None, client_secret: None, mandate_data: None, mandate_id: None, browser_info: None, payment_experience: None, payment_method_type: None, business_country: Some(US), business_label: Some("default"), merchant_connector_details: None, allowed_payment_method_types: None, business_sub_label: None, manual_retry: false, udf: None }"#;
 
         let data_model = root::<(&str, ErrorKind)>(&data).unwrap().1;
 
         panic!("{:?}", data_model);
+    }
+
+    #[test]
+    #[ignore = "It's panicable"]
+    fn test_parse_datetime() {
+        let datetime = "2023-06-06 12:30:30.351996";
+        let parse = parse_datetime::<(&str, ErrorKind)>(datetime);
+        panic!("{:#?}", parse)
+    }
+
+    #[test]
+    #[ignore = "It's panicable"]
+    fn test_parse_date_response() {
+        let data = "PaymentsResponse { created: Some(2023-06-06 12:30:30.351996)}";
+        let parse = root::<(&str, ErrorKind)>(&data).unwrap().1;
+        panic!("{:#?}", parse)
     }
 }
